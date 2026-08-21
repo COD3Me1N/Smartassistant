@@ -13,58 +13,45 @@ ultramsg = UltramsgClient()
 
 
 async def process_incoming_message(db: AsyncSession, webhook_data: dict) -> str:
-    """
-    Processa mensagem recebida do webhook Ultramsg.
-    Formato esperado:
-    {
-      "event_type": "message_received",
-      "instanceId": "...",
-      "data": {
-        "id": "...",
-        "from": "2588XXXXXXX@c.us",
-        "to": "...",
-        "body": "texto da mensagem",
-        "fromMe": false,
-        "type": "chat",
-        ...
-      }
-    }
-    """
     try:
         data = webhook_data.get("data") or webhook_data
         if isinstance(data, list):
             data = data[0] if data else {}
 
-        if data.get("fromMe"):
+        if data.get("fromMe") or data.get("self"):
             return "ignored_from_me"
 
         phone = data.get("from") or data.get("chatId") or ""
-        body = data.get("body") or data.get("text") or ""
+        body = (data.get("body") or data.get("text") or "").strip()
         msg_type = data.get("type", "chat")
+        pushname = (data.get("pushname") or "").strip() or None
 
         if not phone or not body:
             return "no_phone_or_body"
 
         if msg_type != "chat":
-            # Por enquanto só processamos texto
             await ultramsg.send_message(
                 phone,
-                "No momento consigo responder apenas mensagens de texto. Pode escrever o que precisa?",
+                "Por agora respondo só a mensagens de texto. Pode escrever o que precisa?",
             )
             return "non_text"
 
-        # 1. Garante cliente na base
+        # 1. Cliente
         client = await get_or_create_client(db, phone)
 
-        # 2. Salva mensagem do usuário
-        await save_message(db, phone, "user", body)
+        # Guarda o nome do WhatsApp se ainda não tivermos nome
+        if pushname and not client.name:
+            await update_client(db, phone, {"name": pushname})
+            client.name = pushname
 
-        # 3. Histórico
+        # 2. Histórico ANTES de gravar a mensagem atual (evita duplicar no contexto)
         history = await get_conversation_history(db, phone)
 
-        # 4. Dados atuais do cliente para contexto da IA
+        # 3. Grava mensagem do utilizador
+        await save_message(db, phone, "user", body)
+
         client_data = {
-            "name": client.name,
+            "name": client.name or pushname,
             "company_name": client.company_name,
             "company_type": client.company_type,
             "company_size": client.company_size,
@@ -74,23 +61,26 @@ async def process_incoming_message(db: AsyncSession, webhook_data: dict) -> str:
             "conversation_summary": client.conversation_summary,
         }
 
-        # 5. Gera resposta da IA
+        # 4. IA
         reply, updated_data = await generate_response(
             phone=phone,
             user_message=body,
             history=history,
             client_data=client_data,
+            pushname=pushname,
         )
 
-        # 6. Atualiza dados se a IA extraiu informações
+        if not reply or not reply.strip():
+            reply = "Olá! Em que posso ajudar a sua empresa hoje?"
+
+        # 5. Atualiza dados extraídos
         if updated_data:
             await update_client(db, phone, updated_data)
 
-        # 7. Salva resposta da IA
+        # 6. Grava e envia resposta
         await save_message(db, phone, "assistant", reply)
-
-        # 8. Envia via Ultramsg
-        await ultramsg.send_message(phone, reply)
+        result = await ultramsg.send_message(phone, reply)
+        print(f"[Send] to={phone} result={result}")
 
         return "ok"
 
