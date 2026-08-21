@@ -5,8 +5,13 @@ from functools import lru_cache
 class Settings(BaseSettings):
     ultramsg_instance_id: str = "instanceXXXX"
     ultramsg_token: str = "your_token"
+
+    # IA — por padrão usa Groq (grátis)
+    # Outras opções: OpenAI, OpenRouter, etc. (qualquer API compatível OpenAI)
     openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "llama-3.3-70b-versatile"
+    openai_base_url: str = "https://api.groq.com/openai/v1"
+
     database_url: str = "sqlite+aiosqlite:///./smart_assistant.db"
     dashboard_secret: str = "change-me"
     admin_password: str = "admin123"

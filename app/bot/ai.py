@@ -1,10 +1,15 @@
 import json
+import re
 from openai import AsyncOpenAI
 from app.config import get_settings
 
 settings = get_settings()
 
-client = AsyncOpenAI(api_key=settings.openai_api_key)
+# Cliente compatível com OpenAI — funciona com Groq, OpenAI, OpenRouter, etc.
+client = AsyncOpenAI(
+    api_key=settings.openai_api_key or "no-key",
+    base_url=settings.openai_base_url,
+)
 
 PACKAGES = {
     "basico": {
@@ -51,12 +56,13 @@ FLUXO RÁPIDO:
 3. Recomende o pacote certo e peça o fechamento
 4. Confirme e oriente o próximo passo (ativação)
 
-COLETE SEMPRE (e atualize via ferramenta):
+COLETE SEMPRE (e atualize via ferramenta quando disponível):
 nome, empresa, tipo de negócio, tamanho, dor principal, status do funil, pacote de interesse, score, motivo de perda.
 
 Atualize o status: lead → qualified → proposta → cliente / perdido.
 
 Responda em português claro (Moçambique). Seja humano, nunca robótico. Nunca invente preços ou funcionalidades.
+Respostas curtas e objetivas (máx. 3-4 frases por mensagem).
 """
 
 TOOLS = [
@@ -108,6 +114,19 @@ TOOLS = [
 ]
 
 
+def _extract_json_from_text(text: str) -> dict | None:
+    """Tenta extrair dados do cliente se o modelo escrever JSON no texto."""
+    if not text:
+        return None
+    match = re.search(r"\{[^{}]*\"(?:name|company_name|status|score)\"[^{}]*\}", text)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 async def generate_response(
     phone: str,
     user_message: str,
@@ -116,43 +135,54 @@ async def generate_response(
 ) -> tuple[str, dict | None]:
     """
     Gera resposta da IA + possíveis dados atualizados do cliente.
-    Retorna: (resposta_texto, dados_para_atualizar ou None)
+    Funciona com Groq (grátis), OpenAI e outras APIs compatíveis.
     """
+    if not settings.openai_api_key:
+        return (
+            "Olá! Sou o assistente da Smart Assistant. "
+            "Neste momento o sistema de IA está a ser configurado. "
+            "Em breve respondo com todas as informações dos nossos pacotes.",
+            None,
+        )
+
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     if client_data:
-        context = f"""
-DADOS ATUAIS DO CLIENTE:
-- Telefone: {phone}
-- Nome: {client_data.get('name') or 'Desconhecido'}
-- Empresa: {client_data.get('company_name') or 'Desconhecida'}
-- Tipo: {client_data.get('company_type') or 'Desconhecido'}
-- Tamanho: {client_data.get('company_size') or 'Desconhecido'}
-- Status: {client_data.get('status')}
-- Pacote: {client_data.get('package_bought')}
-- Score: {client_data.get('score')}
-- Resumo anterior: {client_data.get('conversation_summary') or 'Nenhum'}
-"""
+        context = (
+            f"DADOS ATUAIS DO CLIENTE:\n"
+            f"- Telefone: {phone}\n"
+            f"- Nome: {client_data.get('name') or 'Desconhecido'}\n"
+            f"- Empresa: {client_data.get('company_name') or 'Desconhecida'}\n"
+            f"- Tipo: {client_data.get('company_type') or 'Desconhecido'}\n"
+            f"- Tamanho: {client_data.get('company_size') or 'Desconhecido'}\n"
+            f"- Status: {client_data.get('status')}\n"
+            f"- Pacote: {client_data.get('package_bought')}\n"
+            f"- Score: {client_data.get('score')}\n"
+            f"- Resumo anterior: {client_data.get('conversation_summary') or 'Nenhum'}"
+        )
         messages.append({"role": "system", "content": context})
 
-    # Histórico (últimas 10 mensagens)
-    for msg in history[-10:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+    for msg in history[-8:]:
+        role = msg.get("role") or "user"
+        content = (msg.get("content") or "").strip()
+        if content and role in ("user", "assistant"):
+            messages.append({"role": role, "content": content})
 
     messages.append({"role": "user", "content": user_message})
 
+    # Tentativa 1: com tools (Groq Llama 70B suporta)
     try:
         response = await client.chat.completions.create(
             model=settings.openai_model,
             messages=messages,
             tools=TOOLS,
             tool_choice="auto",
-            temperature=0.7,
-            max_tokens=600,
+            temperature=0.6,
+            max_tokens=500,
         )
 
         message = response.choices[0].message
-        reply_text = message.content or ""
+        reply_text = (message.content or "").strip()
         updated_data = None
 
         if message.tool_calls:
@@ -160,18 +190,44 @@ DADOS ATUAIS DO CLIENTE:
                 if tool_call.function.name == "update_client_data":
                     try:
                         updated_data = json.loads(tool_call.function.arguments)
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, TypeError):
                         updated_data = None
 
-            # Se a IA só chamou ferramenta sem texto, gera uma resposta curta
-            if not reply_text and updated_data:
-                reply_text = "Perfeito, anotei essas informações. Como posso te ajudar melhor agora?"
+            if not reply_text:
+                reply_text = (
+                    "Perfeito, anotei. "
+                    "Qual é a maior dificuldade que a sua empresa tem hoje com atendimento ou vendas?"
+                )
 
-        return reply_text.strip(), updated_data
+        if not updated_data:
+            updated_data = _extract_json_from_text(reply_text)
+
+        if reply_text:
+            return reply_text, updated_data
+
+    except Exception as e:
+        print(f"[AI tools error] {e} — tentando sem tools...")
+
+    # Tentativa 2: sem tools (mais compatível com qualquer modelo grátis)
+    try:
+        response = await client.chat.completions.create(
+            model=settings.openai_model,
+            messages=messages,
+            temperature=0.6,
+            max_tokens=500,
+        )
+        reply_text = (response.choices[0].message.content or "").strip()
+        updated_data = _extract_json_from_text(reply_text)
+
+        if reply_text:
+            return reply_text, updated_data
 
     except Exception as e:
         print(f"[AI Error] {e}")
-        return (
-            "Desculpe, estou com uma pequena instabilidade no momento. Pode repetir a sua mensagem em instantes?",
-            None,
-        )
+
+    return (
+        "Olá! Sou o consultor da Smart Assistant. "
+        "Criamos bots de WhatsApp que respondem clientes 24/7 e aumentam as suas vendas. "
+        "Qual é o tipo de negócio da sua empresa?",
+        None,
+    )
