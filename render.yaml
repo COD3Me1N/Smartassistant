@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: smart-assistant-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: ULTRAMSG_INSTANCE_ID
+        sync: false
+      - key: ULTRAMSG_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smart-assistant-db
+          property: connectionString
+      - key: APP_URL
+        sync: false
+      - key: COMPANY_NAME
+        value: Smart Assistant
+      - key: META_ACCESS_TOKEN
+        sync: false
+      - key: META_AD_ACCOUNT_ID
+        sync: false
+
+databases:
+  - name: smart-assistant-db
+    plan: free
+    databaseName: smart_assistant
+    user: smart_assistant
