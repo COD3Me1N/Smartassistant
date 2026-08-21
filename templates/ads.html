@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Meta Ads — {{ company_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">Análise de Campanhas Meta Ads</h1>
+        <p class="text-gray-500 text-sm mt-1">Insights para otimizar as vendas da Smart Assistant</p>
+    </div>
+    {% if is_configured %}
+    <form action="/ads/sync" method="post">
+        <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
+            Sincronizar Campanhas
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{% if not is_configured %}
+<div class="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6">
+    <h3 class="font-semibold text-amber-800">Meta Ads ainda não configurado</h3>
+    <p class="text-sm text-amber-700 mt-2">
+        Adicione no arquivo <code class="bg-amber-100 px-1 rounded">.env</code> as variáveis:
+        <br><code>META_ACCESS_TOKEN</code>, <code>META_AD_ACCOUNT_ID</code> (formato act_XXXXX)
+    </p>
+</div>
+{% endif %}
+
+<!-- Recomendações -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+    <h2 class="font-semibold text-gray-800 mb-3">Recomendações Inteligentes</h2>
+    <ul class="space-y-2">
+        {% for rec in recommendations %}
+        <li class="text-sm text-gray-700 flex items-start gap-2">
+            <span>{{ rec }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<!-- Tabela de insights -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500">
+            <tr>
+                <th class="text-left px-5 py-3 font-medium">Campanha</th>
+                <th class="text-left px-5 py-3 font-medium">Impressões</th>
+                <th class="text-left px-5 py-3 font-medium">Cliques</th>
+                <th class="text-left px-5 py-3 font-medium">Gasto</th>
+                <th class="text-left px-5 py-3 font-medium">CTR</th>
+                <th class="text-left px-5 py-3 font-medium">CPC</th>
+                <th class="text-left px-5 py-3 font-medium">Leads</th>
+                <th class="text-left px-5 py-3 font-medium">CPL</th>
+                <th class="text-left px-5 py-3 font-medium">Período</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in insights %}
+            <tr class="border-t border-gray-50 hover:bg-gray-50">
+                <td class="px-5 py-3 font-medium">{{ i.campaign_name or i.campaign_id }}</td>
+                <td class="px-5 py-3">{{ "{:,}".format(i.impressions) }}</td>
+                <td class="px-5 py-3">{{ i.clicks }}</td>
+                <td class="px-5 py-3">{{ "%.2f"|format(i.spend) }}</td>
+                <td class="px-5 py-3">{{ "%.2f"|format(i.ctr) }}%</td>
+                <td class="px-5 py-3">{{ "%.2f"|format(i.cpc) }}</td>
+                <td class="px-5 py-3">{{ i.leads }}</td>
+                <td class="px-5 py-3">{{ "%.2f"|format(i.cpl) if i.cpl else "—" }}</td>
+                <td class="px-5 py-3 text-gray-500 text-xs">{{ i.date_start }} → {{ i.date_stop }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="9" class="px-5 py-12 text-center text-gray-400">
+                    Nenhum insight sincronizado ainda. Clique em "Sincronizar Campanhas" (após configurar o .env).
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

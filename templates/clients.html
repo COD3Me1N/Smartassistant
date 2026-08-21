@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Clientes — {{ company_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">Clientes & Leads</h1>
+        <p class="text-gray-500 text-sm mt-1">Todos os contactos que interagem com o bot</p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+        <a href="/clients" class="px-3 py-1.5 rounded-lg text-sm {% if not status_filter %}bg-slate-800 text-white{% else %}bg-white border text-gray-600{% endif %}">Todos</a>
+        <a href="/clients?status=lead" class="px-3 py-1.5 rounded-lg text-sm {% if status_filter == 'lead' %}bg-slate-800 text-white{% else %}bg-white border text-gray-600{% endif %}">Leads</a>
+        <a href="/clients?status=qualified" class="px-3 py-1.5 rounded-lg text-sm {% if status_filter == 'qualified' %}bg-slate-800 text-white{% else %}bg-white border text-gray-600{% endif %}">Qualificados</a>
+        <a href="/clients?status=proposta" class="px-3 py-1.5 rounded-lg text-sm {% if status_filter == 'proposta' %}bg-slate-800 text-white{% else %}bg-white border text-gray-600{% endif %}">Proposta</a>
+        <a href="/clients?status=cliente" class="px-3 py-1.5 rounded-lg text-sm {% if status_filter == 'cliente' %}bg-slate-800 text-white{% else %}bg-white border text-gray-600{% endif %}">Clientes</a>
+        <a href="/clients?status=perdido" class="px-3 py-1.5 rounded-lg text-sm {% if status_filter == 'perdido' %}bg-slate-800 text-white{% else %}bg-white border text-gray-600{% endif %}">Perdidos</a>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500">
+            <tr>
+                <th class="text-left px-5 py-3 font-medium">Telefone</th>
+                <th class="text-left px-5 py-3 font-medium">Nome</th>
+                <th class="text-left px-5 py-3 font-medium">Empresa</th>
+                <th class="text-left px-5 py-3 font-medium">Tipo</th>
+                <th class="text-left px-5 py-3 font-medium">Status</th>
+                <th class="text-left px-5 py-3 font-medium">Pacote</th>
+                <th class="text-left px-5 py-3 font-medium">Score</th>
+                <th class="text-left px-5 py-3 font-medium">Msgs</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in clients %}
+            <tr class="border-t border-gray-50 hover:bg-gray-50">
+                <td class="px-5 py-3">
+                    <a href="/client/{{ c.phone }}" class="text-emerald-600 hover:underline font-medium">{{ c.phone }}</a>
+                </td>
+                <td class="px-5 py-3">{{ c.name or "—" }}</td>
+                <td class="px-5 py-3">{{ c.company_name or "—" }}</td>
+                <td class="px-5 py-3 text-gray-500">{{ c.company_type or "—" }}</td>
+                <td class="px-5 py-3">
+                    <span class="px-2 py-1 rounded-full text-xs
+                        {% if c.status == 'cliente' %}bg-emerald-100 text-emerald-700
+                        {% elif c.status == 'perdido' %}bg-red-100 text-red-700
+                        {% elif c.status == 'proposta' %}bg-blue-100 text-blue-700
+                        {% elif c.status == 'qualified' %}bg-amber-100 text-amber-700
+                        {% else %}bg-gray-100 text-gray-700{% endif %}">
+                        {{ c.status }}
+                    </span>
+                </td>
+                <td class="px-5 py-3 capitalize">{{ c.package_bought if c.package_bought != 'none' else "—" }}</td>
+                <td class="px-5 py-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-12 bg-gray-100 rounded-full h-1.5">
+                            <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {{ c.score }}%"></div>
+                        </div>
+                        <span class="text-xs text-gray-500">{{ c.score }}</span>
+                    </div>
+                </td>
+                <td class="px-5 py-3 text-gray-500">{{ c.message_count }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" class="px-5 py-12 text-center text-gray-400">
+                    Nenhum cliente encontrado. O bot começa a registar assim que receber a primeira mensagem.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

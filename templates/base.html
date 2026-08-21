@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ company_name }}{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .card { @apply bg-white rounded-xl shadow-sm border border-gray-100 p-5; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-lg">SA</div>
+            <span class="font-semibold text-lg">{{ company_name }}</span>
+        </div>
+        <div class="flex gap-6 text-sm">
+            <a href="/" class="hover:text-emerald-400 transition">Dashboard</a>
+            <a href="/clients" class="hover:text-emerald-400 transition">Clientes</a>
+            <a href="/ads" class="hover:text-emerald-400 transition">Meta Ads</a>
+            <a href="/health" class="hover:text-emerald-400 transition">Status</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="text-center text-gray-400 text-sm py-6">
+        © 2026 {{ company_name }} — Bot de Automação Inteligente
+    </footer>
+</body>
+</html>
